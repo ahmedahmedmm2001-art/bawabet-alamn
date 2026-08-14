@@ -408,6 +408,7 @@
 
 <!-- Firebase SDK (compat build - works with plain <script> tags, no bundler needed) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-auth-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-firestore-compat.min.js"></script>
 
 <script>
@@ -431,6 +432,19 @@ db.settings({
   useFetchStreams: false
 });
 const DATA_COLLECTION = 'appData';
+
+// ---------- Silent anonymous sign-in (required by Firestore security rules) ----------
+const auth = firebase.auth();
+const authReady = new Promise((resolve) => {
+  let resolved = false;
+  auth.onAuthStateChanged((user) => {
+    if (user && !resolved) { resolved = true; resolve(user); }
+  });
+  auth.signInAnonymously().catch((err) => {
+    console.error('Anonymous sign-in failed:', err);
+    modalAlert('تعذر تسجيل الدخول التلقائي بالتطبيق. تأكد إن خاصية "Anonymous" مفعّلة في إعدادات Authentication بمشروع Firebase.', 'مشكلة في الاتصال');
+  });
+});
 
 let employees = []; // {code, name, dept}
 let logs = [];       // {code, name, type, timestamp}
@@ -946,6 +960,7 @@ function setupVoiceSearch(micBtnId, inputId, onResult) {
 // ---------- Init ----------
 async function init() {
   applyRoleUI();
+  await authReady;
   await loadEmployees();
   await loadLogs();
   renderEmpGroups();
