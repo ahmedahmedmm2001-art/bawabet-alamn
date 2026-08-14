@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>بوابة الأمن - تسجيل الحضور والانصراف</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="بوابة الأمن">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -968,6 +975,15 @@ async function init() {
   setupVoiceSearch('micLogBtn', 'searchLog', (text) => renderLogList(text));
 }
 init();
+
+// ---------- Register service worker (enables real "install app" on Android) ----------
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((e) => {
+      console.error('Service worker registration failed:', e);
+    });
+  });
+}
 </script>
 </body>
 </html>
