@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>بوابة الأمن - تسجيل الحضور والانصراف</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Tahoma', 'Segoe UI', Arial, sans-serif;
+    background: #f7fafc;
+    color: #1e293b;
+    min-height: 100vh;
+    padding: 16px;
+    padding-bottom: 100px;
+  }
+  .container { max-width: 720px; margin: 0 auto; }
+
+  header {
+    text-align: center;
+    margin-bottom: 16px;
+    padding: 18px;
+    background: #ffffff;
+    border-radius: 14px;
+    border: 2px solid #2563eb;
+    box-shadow: 0 2px 10px rgba(37,99,235,0.08);
+  }
+  header h1 { font-size: 1.3rem; color: #1d4ed8; margin-bottom: 4px; font-weight: 800; }
+  #clock { font-size: 1.6rem; font-weight: bold; color: #2563eb; margin-top: 6px; }
+
+  .role-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    font-size: 0.95rem;
+  }
+  .role-bar .role-label { color: #64748b; }
+  .role-bar .role-current { font-weight: bold; color: #1d4ed8; font-size: 1.05rem; }
+  .role-bar .role-current.manager { color: #d97706; }
+  .role-switch-btn {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    background: #ffffff;
+    border: 1px solid #dbeafe;
+    border-radius: 10px;
+    padding: 4px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 11px 4px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .tab-btn.active { background: #2563eb; color: #fff; font-weight: bold; }
+  .tab-btn.hidden { display: none; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+    border: 1px solid #dbeafe;
+    box-shadow: 0 1px 6px rgba(37,99,235,0.05);
+  }
+
+  input, select {
+    width: 100%;
+    padding: 13px;
+    border-radius: 8px;
+    border: 1.5px solid #cbd5e1;
+    background: #ffffff;
+    color: #1e293b;
+    font-size: 1rem;
+    margin-bottom: 10px;
+  }
+  input:focus, select:focus { outline: 2px solid #2563eb; border-color: #2563eb; }
+
+  .search-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .search-row input { margin-bottom: 10px; flex: 1; }
+  .mic-btn {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    border-radius: 8px;
+    border: 1.5px solid #2563eb;
+    background: #eff6ff;
+    color: #2563eb;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mic-btn.listening {
+    background: #2563eb;
+    color: #fff;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.5); }
+    70% { box-shadow: 0 0 0 10px rgba(37,99,235,0); }
+    100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+  }
+
+  /* Department groups */
+  .dept-group { margin-bottom: 20px; }
+  .dept-title {
+    font-size: 1.1rem;
+    color: #1d4ed8;
+    font-weight: 800;
+    margin-bottom: 10px;
+    padding-right: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dept-title::before { content: "🏢"; font-size: 1rem; }
+
+  .emp-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 9px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .emp-card:active { transform: scale(0.995); }
+  .emp-card.selected {
+    border-color: #2563eb;
+    background: #eff6ff;
+    border-width: 2px;
+  }
+  .emp-info .emp-name { font-weight: 800; font-size: 1.15rem; color: #1e293b; }
+  .emp-info .emp-code { color: #475569; font-size: 1rem; margin-top: 3px; font-weight: 600; }
+  .badge { padding: 6px 14px; border-radius: 20px; font-size: 0.9rem; font-weight: 700; white-space: nowrap; }
+  .badge-in { background: #dcfce7; color: #15803d; }
+  .badge-out { background: #fee2e2; color: #b91c1c; }
+
+  .empty-note { text-align: center; color: #94a3b8; font-size: 0.9rem; padding: 24px 0; }
+
+  /* Sticky action bar */
+  .action-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #ffffff;
+    border-top: 2px solid #2563eb;
+    padding: 14px 16px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    z-index: 50;
+    box-shadow: 0 -4px 14px rgba(0,0,0,0.08);
+  }
+  .action-bar.show { display: flex; }
+  .action-bar .sel-info { font-size: 0.9rem; }
+  .action-bar .sel-info .sel-name { font-weight: 800; display: block; font-size: 1.05rem; color: #1e293b; }
+  .action-bar .sel-info .sel-dept { color: #64748b; font-size: 0.8rem; }
+  .action-bar button.do-action {
+    padding: 13px 24px;
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    color: #fff;
+  }
+  .do-in { background: #16a34a; }
+  .do-out { background: #dc2626; }
+  .cancel-sel {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding: 6px;
+  }
+
+  .status-msg {
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: center;
+    display: none;
+  }
+  .status-msg.show { display: block; }
+  .status-ok { background: #dcfce7; color: #15803d; }
+  .status-err { background: #fee2e2; color: #b91c1c; }
+
+  /* Log */
+  .log-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 13px 4px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.9rem;
+  }
+  .log-item:last-child { border-bottom: none; }
+  .log-item .l-name { font-weight: 800; font-size: 1.1rem; color: #1e293b; }
+  .log-item .l-meta { color: #64748b; font-size: 0.85rem; margin-top: 2px; }
+  .log-item .badge { font-size: 1rem; padding: 7px 16px; }
+
+  /* Manage */
+  .manage-row {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .manage-row.view {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .manage-row .mv-info .mv-name { font-weight: 800; font-size: 1rem; color: #1e293b; }
+  .manage-row .mv-info .mv-meta { color: #64748b; font-size: 0.82rem; margin-top: 2px; }
+  .mv-actions { display: flex; gap: 6px; }
+  .mv-actions button {
+    border: none;
+    border-radius: 6px;
+    padding: 7px 13px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .edit-btn { background: #dbeafe; color: #1d4ed8; }
+  .del-btn { background: #fee2e2; color: #b91c1c; }
+  .save-btn { background: #dcfce7; color: #15803d; }
+  .cancel-btn { background: #e2e8f0; color: #475569; }
+  .edit-form input { margin-bottom: 8px; }
+  .edit-form .edit-actions { display: flex; gap: 8px; }
+  .edit-form .edit-actions button { flex: 1; padding: 10px; }
+
+  .add-emp-btn {
+    width: 100%;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 13px;
+    font-weight: bold;
+    font-size: 0.95rem;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+
+  .filter-row input { margin-bottom: 12px; }
+  .loading { text-align: center; padding: 24px; color: #94a3b8; }
+  .notice { font-size: 0.75rem; color: #94a3b8; text-align: center; margin-top: 6px; }
+  h3.section-title { font-size: 1rem; color: #1e293b; font-weight: 800; margin-bottom: 10px; }
+  /* Custom modal (replaces native alert/prompt/confirm which are blocked in this sandbox) */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: #ffffff;
+    border: 1px solid #dbeafe;
+    border-radius: 14px;
+    padding: 20px;
+    width: 100%;
+    max-width: 340px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  }
+  .modal-box .modal-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 10px; color: #1e293b; }
+  .modal-box .modal-msg { font-size: 0.92rem; color: #475569; margin-bottom: 14px; line-height: 1.5; }
+  .modal-box input { margin-bottom: 14px; }
+  .modal-box .modal-actions { display: flex; gap: 10px; }
+  .modal-box .modal-actions button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .modal-btn-confirm { background: #2563eb; color: #fff; }
+  .modal-btn-danger { background: #dc2626; color: #fff; }
+  .modal-btn-cancel { background: #e2e8f0; color: #475569; }
+
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🔐 بوابة الأمن</h1>
+    <div id="clock">--:--:--</div>
+  </header>
+
+  <div class="role-bar">
+    <div>
+      <span class="role-label">الوضع الحالي: </span>
+      <span class="role-current" id="roleLabel">أمن</span>
+    </div>
+    <button class="role-switch-btn" id="roleSwitchBtn">تبديل الصلاحية</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="main">الموظفون</button>
+    <button class="tab-btn" data-tab="log">السجل</button>
+    <button class="tab-btn hidden" id="tabManageBtn" data-tab="manage">إدارة الموظفين</button>
+  </div>
+
+  <!-- الموظفون -->
+  <div class="panel active" id="panel-main">
+    <div class="search-row">
+      <input type="text" id="searchEmp" placeholder="بحث بالاسم أو الكود...">
+      <button class="mic-btn" id="micEmpBtn" title="بحث صوتي">🎤</button>
+    </div>
+    <div id="empGroups"><div class="loading">جارٍ التحميل...</div></div>
+    <div class="status-msg" id="statusMsg"></div>
+  </div>
+
+  <!-- السجل -->
+  <div class="panel" id="panel-log">
+    <div class="card">
+      <div class="search-row filter-row">
+        <input type="text" id="searchLog" placeholder="بحث باسم الموظف أو الكود...">
+        <button class="mic-btn" id="micLogBtn" title="بحث صوتي">🎤</button>
+      </div>
+      <h3 class="section-title">آخر الحركات</h3>
+      <div id="logList"><div class="loading">جارٍ التحميل...</div></div>
+      <button class="add-emp-btn" id="exportLogBtn" style="margin-top:14px;">⬇️ تصدير السجل كملف Excel/CSV</button>
+    </div>
+  </div>
+
+  <!-- إدارة الموظفين (مدير فقط) -->
+  <div class="panel" id="panel-manage">
+    <div class="card">
+      <h3 class="section-title">إضافة موظف جديد</h3>
+      <input type="text" id="newCode" placeholder="الكود الوظيفي">
+      <input type="text" id="newName" placeholder="اسم الموظف">
+      <input type="text" id="newDept" placeholder="الإدارة / القسم">
+      <button class="add-emp-btn" id="addEmpBtn">إضافة الموظف</button>
+    </div>
+    <div class="card">
+      <h3 class="section-title">قائمة الموظفين (تعديل / حذف)</h3>
+      <div id="manageList"><div class="loading">جارٍ التحميل...</div></div>
+      <button class="add-emp-btn" id="exportEmpBtn" style="margin-top:14px;">⬇️ تصدير قائمة الموظفين كملف Excel/CSV</button>
+    </div>
+    <p class="notice">وضع المدير: يمكنك إضافة، تعديل، وحذف بيانات الموظفين.</p>
+  </div>
+
+  <!-- Sticky action bar -->
+  <div class="action-bar" id="actionBar">
+    <button class="cancel-sel" id="cancelSelBtn">✕</button>
+    <div class="sel-info">
+      <span class="sel-name" id="selName"></span>
+      <span class="sel-dept" id="selDept"></span>
+    </div>
+    <button class="do-action" id="doActionBtn"></button>
+  </div>
+</div>
+
+<!-- Custom modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-msg" id="modalMsg"></div>
+    <input type="text" id="modalInput" style="display:none;">
+    <div class="modal-actions" id="modalActions"></div>
+  </div>
+</div>
+
+<!-- Firebase SDK (compat build - works with plain <script> tags, no bundler needed) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-firestore-compat.min.js"></script>
+
+<script>
+const EMPLOYEES_KEY = 'employees-list';
+const LOGS_KEY = 'attendance-logs';
+const MANAGER_PASSWORD = '1234';
+
+// ---------- Firebase setup ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyB7BsZShMKkPHyqXCH793M8meQeDWwbGIE",
+  authDomain: "bawabet-alamn.firebaseapp.com",
+  projectId: "bawabet-alamn",
+  storageBucket: "bawabet-alamn.firebasestorage.app",
+  messagingSenderId: "169780767271",
+  appId: "1:169780767271:web:26d416eeb9ef14c3677c02"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+db.settings({
+  experimentalForceLongPolling: true,
+  useFetchStreams: false
+});
+const DATA_COLLECTION = 'appData';
+
+let employees = []; // {code, name, dept}
+let logs = [];       // {code, name, type, timestamp}
+let role = 'security'; // 'security' | 'manager'
+let selectedCode = null;
+let editingCode = null;
+
+function fmtTime(ts) {
+  return new Date(ts).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+}
+function fmtDate(ts) {
+  return new Date(ts).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('ar-EG');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ---------- Storage helpers (Firestore) ----------
+async function loadEmployees() {
+  try {
+    const doc = await db.collection(DATA_COLLECTION).doc(EMPLOYEES_KEY).get();
+    employees = doc.exists ? (doc.data().items || []) : [];
+  } catch (e) {
+    console.error('loadEmployees failed:', e);
+    employees = [];
+    await modalAlert('تعذر الاتصال بقاعدة البيانات. تأكد من الاتصال بالإنترنت وحاول تحديث الصفحة.', 'مشكلة في الاتصال');
+  }
+}
+async function saveEmployees() {
+  try {
+    await db.collection(DATA_COLLECTION).doc(EMPLOYEES_KEY).set({ items: employees });
+    return true;
+  } catch (e) {
+    console.error('saveEmployees failed:', e);
+    showStatus('حدث خطأ أثناء حفظ بيانات الموظفين', false);
+    return false;
+  }
+}
+async function loadLogs() {
+  try {
+    const doc = await db.collection(DATA_COLLECTION).doc(LOGS_KEY).get();
+    logs = doc.exists ? (doc.data().items || []) : [];
+    logs.sort((a, b) => b.timestamp - a.timestamp);
+  } catch (e) {
+    console.error('loadLogs failed:', e);
+    logs = [];
+  }
+}
+async function addLogEntry(code, name, type) {
+  const entry = { code, name, type, timestamp: Date.now() };
+  const updated = [entry, ...logs];
+  try {
+    await db.collection(DATA_COLLECTION).doc(LOGS_KEY).set({ items: updated });
+    logs = updated;
+    return true;
+  } catch (e) {
+    console.error('addLogEntry failed:', e);
+    return false;
+  }
+}
+
+// ---------- Status helpers ----------
+function lastStatusFor(code) {
+  const entry = logs.find(l => l.code === code);
+  return entry ? entry.type : 'out'; // default: considered outside
+}
+
+// ---------- Custom modal engine (replaces alert/prompt/confirm) ----------
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+function modalAlert(message, title = 'تنبيه') {
+  return new Promise(resolve => {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalMsg').textContent = message;
+    const input = document.getElementById('modalInput');
+    input.style.display = 'none';
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = '';
+    const okBtn = document.createElement('button');
+    okBtn.className = 'modal-btn-confirm';
+    okBtn.textContent = 'حسناً';
+    okBtn.addEventListener('click', () => { closeModal(); resolve(); });
+    actions.appendChild(okBtn);
+    document.getElementById('modalOverlay').classList.add('show');
+  });
+}
+
+function modalConfirm(message, title = 'تأكيد') {
+  return new Promise(resolve => {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalMsg').textContent = message;
+    const input = document.getElementById('modalInput');
+    input.style.display = 'none';
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = '';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'modal-btn-cancel';
+    cancelBtn.textContent = 'إلغاء';
+    cancelBtn.addEventListener('click', () => { closeModal(); resolve(false); });
+    const okBtn = document.createElement('button');
+    okBtn.className = 'modal-btn-danger';
+    okBtn.textContent = 'تأكيد';
+    okBtn.addEventListener('click', () => { closeModal(); resolve(true); });
+    actions.appendChild(cancelBtn);
+    actions.appendChild(okBtn);
+    document.getElementById('modalOverlay').classList.add('show');
+  });
+}
+
+function modalPrompt(message, title = 'إدخال', inputType = 'text') {
+  return new Promise(resolve => {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalMsg').textContent = message;
+    const input = document.getElementById('modalInput');
+    input.style.display = 'block';
+    input.type = inputType;
+    input.value = '';
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = '';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'modal-btn-cancel';
+    cancelBtn.textContent = 'إلغاء';
+    cancelBtn.addEventListener('click', () => { closeModal(); resolve(null); });
+    const okBtn = document.createElement('button');
+    okBtn.className = 'modal-btn-confirm';
+    okBtn.textContent = 'تأكيد';
+    const submit = () => { const v = input.value; closeModal(); resolve(v); };
+    okBtn.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    actions.appendChild(cancelBtn);
+    actions.appendChild(okBtn);
+    document.getElementById('modalOverlay').classList.add('show');
+    setTimeout(() => input.focus(), 50);
+  });
+}
+
+// ---------- Role handling ----------
+function applyRoleUI() {
+  const label = document.getElementById('roleLabel');
+  label.textContent = role === 'manager' ? 'مدير' : 'أمن';
+  label.className = 'role-current' + (role === 'manager' ? ' manager' : '');
+  document.getElementById('tabManageBtn').classList.toggle('hidden', role !== 'manager');
+  if (role !== 'manager') {
+    // If currently on manage tab, switch back to main
+    const managePanel = document.getElementById('panel-manage');
+    if (managePanel.classList.contains('active')) {
+      switchTab('main');
+    }
+  }
+}
+
+document.getElementById('roleSwitchBtn').addEventListener('click', async () => {
+  if (role === 'security') {
+    const pass = await modalPrompt('أدخل كلمة مرور المدير للتبديل:', 'صلاحية المدير', 'password');
+    if (pass === null) return;
+    if (pass === MANAGER_PASSWORD) {
+      role = 'manager';
+      applyRoleUI();
+    } else {
+      await modalAlert('كلمة المرور غير صحيحة');
+    }
+  } else {
+    role = 'security';
+    applyRoleUI();
+  }
+});
+
+// ---------- Tabs ----------
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('.tab-btn[data-tab="' + name + '"]').classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'log') renderLogList();
+  if (name === 'manage') renderManageList();
+  if (name !== 'main') hideActionBar();
+}
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+// ---------- Main employee list (grouped by department) ----------
+function groupByDept(list) {
+  const groups = {};
+  list.forEach(emp => {
+    const dept = emp.dept && emp.dept.trim() ? emp.dept.trim() : 'بدون إدارة';
+    if (!groups[dept]) groups[dept] = [];
+    groups[dept].push(emp);
+  });
+  return groups;
+}
+
+function renderEmpGroups(filter = '') {
+  const container = document.getElementById('empGroups');
+  let list = employees;
+  const f = filter.trim();
+  if (f) {
+    list = list.filter(e => e.name.includes(f) || e.code.includes(f));
+  }
+  if (list.length === 0) {
+    container.innerHTML = '<div class="empty-note">لا يوجد موظفون مطابقون</div>';
+    return;
+  }
+  const groups = groupByDept(list);
+  container.innerHTML = '';
+  Object.keys(groups).sort().forEach(dept => {
+    const wrap = document.createElement('div');
+    wrap.className = 'dept-group';
+    const title = document.createElement('div');
+    title.className = 'dept-title';
+    title.textContent = dept;
+    wrap.appendChild(title);
+
+    groups[dept].sort((a, b) => a.name.localeCompare(b.name, 'ar')).forEach(emp => {
+      const status = lastStatusFor(emp.code);
+      const card = document.createElement('div');
+      card.className = 'emp-card' + (emp.code === selectedCode ? ' selected' : '');
+      card.dataset.code = emp.code;
+      card.innerHTML = `
+        <div class="emp-info">
+          <div class="emp-name">${emp.name}</div>
+          <div class="emp-code">كود: ${emp.code}</div>
+        </div>
+        <span class="badge ${status === 'in' ? 'badge-in' : 'badge-out'}">${status === 'in' ? 'موجود' : 'خارج'}</span>
+      `;
+      card.addEventListener('click', () => selectEmployee(emp.code));
+      wrap.appendChild(card);
+    });
+    container.appendChild(wrap);
+  });
+}
+
+function selectEmployee(code) {
+  if (selectedCode === code) {
+    selectedCode = null;
+    hideActionBar();
+  } else {
+    selectedCode = code;
+    showActionBar(code);
+  }
+  renderEmpGroups(document.getElementById('searchEmp').value);
+}
+
+function showActionBar(code) {
+  const emp = employees.find(e => e.code === code);
+  if (!emp) return;
+  const status = lastStatusFor(code);
+  document.getElementById('selName').textContent = emp.name;
+  document.getElementById('selDept').textContent = (emp.dept || 'بدون إدارة') + ' - كود ' + emp.code;
+  const btn = document.getElementById('doActionBtn');
+  if (status === 'in') {
+    btn.textContent = '🚪 تسجيل خروج';
+    btn.className = 'do-action do-out';
+  } else {
+    btn.textContent = '✅ تسجيل دخول';
+    btn.className = 'do-action do-in';
+  }
+  document.getElementById('actionBar').classList.add('show');
+}
+function hideActionBar() {
+  document.getElementById('actionBar').classList.remove('show');
+}
+
+document.getElementById('cancelSelBtn').addEventListener('click', () => {
+  selectedCode = null;
+  hideActionBar();
+  renderEmpGroups(document.getElementById('searchEmp').value);
+});
+
+document.getElementById('doActionBtn').addEventListener('click', async () => {
+  if (!selectedCode) return;
+  const emp = employees.find(e => e.code === selectedCode);
+  if (!emp) return;
+  const status = lastStatusFor(selectedCode);
+  const newType = status === 'in' ? 'out' : 'in';
+  const ok = await addLogEntry(emp.code, emp.name, newType);
+  if (ok) {
+    showStatus((newType === 'in' ? 'تم تسجيل دخول: ' : 'تم تسجيل خروج: ') + emp.name, true);
+    showActionBar(selectedCode);
+    renderEmpGroups(document.getElementById('searchEmp').value);
+  } else {
+    showStatus('فشل التسجيل، حاول مرة أخرى', false);
+  }
+});
+
+document.getElementById('searchEmp').addEventListener('input', (e) => {
+  renderEmpGroups(e.target.value);
+});
+
+function showStatus(msg, ok) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  el.className = 'status-msg show ' + (ok ? 'status-ok' : 'status-err');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ---------- Log tab ----------
+function renderLogList(filter = '') {
+  const container = document.getElementById('logList');
+  let data = logs;
+  const f = filter.trim();
+  if (f) data = data.filter(l => l.name.includes(f) || (l.code || '').includes(f));
+  if (data.length === 0) {
+    container.innerHTML = '<div class="empty-note">لا توجد سجلات</div>';
+    return;
+  }
+  container.innerHTML = '';
+  data.slice(0, 150).forEach(l => {
+    const row = document.createElement('div');
+    row.className = 'log-item';
+    row.innerHTML = `
+      <div>
+        <div class="l-name">${l.name}</div>
+        <div class="l-meta">كود ${l.code || '-'} · ${fmtDate(l.timestamp)}</div>
+      </div>
+      <span class="badge ${l.type === 'in' ? 'badge-in' : 'badge-out'}">
+        ${l.type === 'in' ? 'دخول' : 'خروج'} - ${fmtTime(l.timestamp)}
+      </span>
+    `;
+    container.appendChild(row);
+  });
+}
+document.getElementById('searchLog').addEventListener('input', (e) => renderLogList(e.target.value));
+
+// ---------- Manage tab (manager only) ----------
+function renderManageList() {
+  const container = document.getElementById('manageList');
+  if (employees.length === 0) {
+    container.innerHTML = '<div class="empty-note">لا يوجد موظفون مضافون بعد</div>';
+    return;
+  }
+  container.innerHTML = '';
+  employees.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar')).forEach(emp => {
+    const row = document.createElement('div');
+    row.className = 'manage-row';
+
+    if (editingCode === emp.code) {
+      row.innerHTML = `
+        <div class="edit-form">
+          <input type="text" class="e-code" value="${emp.code}" placeholder="الكود">
+          <input type="text" class="e-name" value="${emp.name}" placeholder="الاسم">
+          <input type="text" class="e-dept" value="${emp.dept || ''}" placeholder="الإدارة">
+          <div class="edit-actions">
+            <button class="save-btn">حفظ</button>
+            <button class="cancel-btn">إلغاء</button>
+          </div>
+        </div>
+      `;
+      row.querySelector('.save-btn').addEventListener('click', async () => {
+        const newCode = row.querySelector('.e-code').value.trim();
+        const newName = row.querySelector('.e-name').value.trim();
+        const newDept = row.querySelector('.e-dept').value.trim();
+        if (!newCode || !newName) { await modalAlert('الكود والاسم مطلوبان'); return; }
+        if (newCode !== emp.code && employees.some(x => x.code === newCode)) {
+          await modalAlert('هذا الكود مستخدم بالفعل'); return;
+        }
+        emp.code = newCode; emp.name = newName; emp.dept = newDept;
+        editingCode = null;
+        await saveEmployees();
+        renderManageList();
+        renderEmpGroups(document.getElementById('searchEmp').value);
+      });
+      row.querySelector('.cancel-btn').addEventListener('click', () => {
+        editingCode = null;
+        renderManageList();
+      });
+    } else {
+      row.classList.add('view');
+      row.innerHTML = `
+        <div class="mv-info">
+          <div class="mv-name">${emp.name}</div>
+          <div class="mv-meta">كود ${emp.code} · ${emp.dept || 'بدون إدارة'}</div>
+        </div>
+        <div class="mv-actions">
+          <button class="edit-btn">تعديل</button>
+          <button class="del-btn">حذف</button>
+        </div>
+      `;
+      row.querySelector('.edit-btn').addEventListener('click', () => {
+        editingCode = emp.code;
+        renderManageList();
+      });
+      row.querySelector('.del-btn').addEventListener('click', async () => {
+        const ok = await modalConfirm('هل تريد حذف ' + emp.name + '؟', 'تأكيد الحذف');
+        if (!ok) return;
+        employees = employees.filter(x => x.code !== emp.code);
+        await saveEmployees();
+        renderManageList();
+        renderEmpGroups(document.getElementById('searchEmp').value);
+      });
+    }
+    container.appendChild(row);
+  });
+}
+
+document.getElementById('addEmpBtn').addEventListener('click', async () => {
+  const code = document.getElementById('newCode').value.trim();
+  const name = document.getElementById('newName').value.trim();
+  const dept = document.getElementById('newDept').value.trim();
+  if (!code || !name) { await modalAlert('الكود والاسم مطلوبان'); return; }
+  if (employees.some(x => x.code === code)) { await modalAlert('هذا الكود مستخدم بالفعل'); return; }
+  employees.push({ code, name, dept });
+  const ok = await saveEmployees();
+  if (ok) {
+    document.getElementById('newCode').value = '';
+    document.getElementById('newName').value = '';
+    document.getElementById('newDept').value = '';
+    renderManageList();
+    renderEmpGroups(document.getElementById('searchEmp').value);
+  }
+});
+
+// ---------- CSV export (Excel compatible, Arabic-safe) ----------
+function downloadCSV(filename, headers, rows) {
+  const escapeCell = (val) => {
+    const s = String(val ?? '');
+    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  };
+  const lines = [headers.map(escapeCell).join(',')];
+  rows.forEach(r => lines.push(r.map(escapeCell).join(',')));
+  const csvContent = '\uFEFF' + lines.join('\r\n'); // BOM for correct Arabic in Excel
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('exportLogBtn').addEventListener('click', () => {
+  if (logs.length === 0) { modalAlert('لا يوجد سجلات لتصديرها'); return; }
+  const headers = ['الكود', 'الاسم', 'نوع الحركة', 'التاريخ', 'الوقت'];
+  const rows = logs.map(l => [
+    l.code || '-',
+    l.name,
+    l.type === 'in' ? 'دخول' : 'خروج',
+    fmtDate(l.timestamp),
+    fmtTime(l.timestamp)
+  ]);
+  downloadCSV('سجل_الحضور_والانصراف.csv', headers, rows);
+});
+
+document.getElementById('exportEmpBtn').addEventListener('click', () => {
+  if (employees.length === 0) { modalAlert('لا يوجد موظفون لتصديرهم'); return; }
+  const headers = ['الكود', 'الاسم', 'الإدارة', 'الحالة الحالية'];
+  const rows = employees.map(e => [
+    e.code,
+    e.name,
+    e.dept || '-',
+    lastStatusFor(e.code) === 'in' ? 'موجود' : 'خارج'
+  ]);
+  downloadCSV('قائمة_الموظفين.csv', headers, rows);
+});
+
+// ---------- Voice search (Arabic) ----------
+function setupVoiceSearch(micBtnId, inputId, onResult) {
+  const micBtn = document.getElementById(micBtnId);
+  const input = document.getElementById(inputId);
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognitionCtor) {
+    micBtn.addEventListener('click', () => {
+      modalAlert('البحث الصوتي غير مدعوم في هذا المتصفح. جرّب استخدام متصفح Chrome.');
+    });
+    return;
+  }
+
+  const recognition = new SpeechRecognitionCtor();
+  recognition.lang = 'ar-EG';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  let listening = false;
+
+  recognition.addEventListener('result', (e) => {
+    const transcript = e.results[0][0].transcript;
+    input.value = transcript;
+    onResult(transcript);
+  });
+  recognition.addEventListener('end', () => {
+    listening = false;
+    micBtn.classList.remove('listening');
+  });
+  recognition.addEventListener('error', () => {
+    listening = false;
+    micBtn.classList.remove('listening');
+  });
+
+  micBtn.addEventListener('click', () => {
+    if (listening) {
+      recognition.stop();
+      return;
+    }
+    try {
+      recognition.start();
+      listening = true;
+      micBtn.classList.add('listening');
+    } catch (e) {
+      // recognition already started or mic permission denied
+    }
+  });
+}
+
+// ---------- Init ----------
+async function init() {
+  applyRoleUI();
+  await loadEmployees();
+  await loadLogs();
+  renderEmpGroups();
+  setupVoiceSearch('micEmpBtn', 'searchEmp', (text) => renderEmpGroups(text));
+  setupVoiceSearch('micLogBtn', 'searchLog', (text) => renderLogList(text));
+}
+init();
+</script>
+</body>
+</html>
