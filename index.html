@@ -426,6 +426,7 @@
     <div class="modal-title" id="modalTitle"></div>
     <div class="modal-msg" id="modalMsg"></div>
     <input type="text" id="modalInput" style="display:none;">
+    <input type="text" id="modalInput2" style="display:none;">
     <div class="modal-actions" id="modalActions"></div>
   </div>
 </div>
@@ -558,12 +559,12 @@ async function addCheckinWithMissingCheckout(code, name) {
   return await persistLogs([inEntry, outEntry, ...logs]);
 }
 
-async function updateLogEntryTime(id, hours, minutes) {
+async function updateLogEntryDateTime(id, dateStr, timeStr) {
   const idx = logs.findIndex(l => l.id === id);
   if (idx === -1) return false;
   const entry = logs[idx];
-  const d = new Date(entry.timestamp);
-  d.setHours(hours, minutes, 0, 0);
+  const d = new Date(dateStr + 'T' + timeStr + ':00');
+  if (isNaN(d.getTime())) return false;
   const updatedArray = logs.slice();
   updatedArray[idx] = { ...entry, timestamp: d.getTime(), timeUnknown: false };
   return await persistLogs(updatedArray);
@@ -584,8 +585,8 @@ function modalAlert(message, title = 'تنبيه') {
   return new Promise(resolve => {
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalMsg').textContent = message;
-    const input = document.getElementById('modalInput');
-    input.style.display = 'none';
+    document.getElementById('modalInput').style.display = 'none';
+    document.getElementById('modalInput2').style.display = 'none';
     const actions = document.getElementById('modalActions');
     actions.innerHTML = '';
     const okBtn = document.createElement('button');
@@ -601,8 +602,8 @@ function modalConfirm(message, title = 'تأكيد') {
   return new Promise(resolve => {
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalMsg').textContent = message;
-    const input = document.getElementById('modalInput');
-    input.style.display = 'none';
+    document.getElementById('modalInput').style.display = 'none';
+    document.getElementById('modalInput2').style.display = 'none';
     const actions = document.getElementById('modalActions');
     actions.innerHTML = '';
     const cancelBtn = document.createElement('button');
@@ -623,6 +624,7 @@ function modalPrompt(message, title = 'إدخال', inputType = 'text') {
   return new Promise(resolve => {
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalMsg').textContent = message;
+    document.getElementById('modalInput2').style.display = 'none';
     const input = document.getElementById('modalInput');
     input.style.display = 'block';
     input.type = inputType;
@@ -643,6 +645,43 @@ function modalPrompt(message, title = 'إدخال', inputType = 'text') {
     actions.appendChild(okBtn);
     document.getElementById('modalOverlay').classList.add('show');
     setTimeout(() => input.focus(), 50);
+  });
+}
+
+// Prompts for both a date and a time together — used to correct auto-generated
+// log entries where the exact moment wasn't known.
+function modalPromptDateTime(message, title, defaultDate, defaultTime) {
+  return new Promise(resolve => {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalMsg').textContent = message;
+    const dateInput = document.getElementById('modalInput');
+    const timeInput = document.getElementById('modalInput2');
+    dateInput.style.display = 'block';
+    dateInput.type = 'date';
+    dateInput.value = defaultDate;
+    timeInput.style.display = 'block';
+    timeInput.type = 'time';
+    timeInput.value = defaultTime;
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = '';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'modal-btn-cancel';
+    cancelBtn.textContent = 'إلغاء';
+    cancelBtn.addEventListener('click', () => { closeModal(); timeInput.style.display = 'none'; resolve(null); });
+    const okBtn = document.createElement('button');
+    okBtn.className = 'modal-btn-confirm';
+    okBtn.textContent = 'تأكيد';
+    const submit = () => {
+      const d = dateInput.value, t = timeInput.value;
+      closeModal();
+      timeInput.style.display = 'none';
+      resolve(d && t ? { date: d, time: t } : null);
+    };
+    okBtn.addEventListener('click', submit);
+    actions.appendChild(cancelBtn);
+    actions.appendChild(okBtn);
+    document.getElementById('modalOverlay').classList.add('show');
+    setTimeout(() => dateInput.focus(), 50);
   });
 }
 
@@ -857,15 +896,21 @@ function renderLogList(filter = '') {
     if (l.timeUnknown) {
       const setBtn = document.createElement('button');
       setBtn.className = 'set-time-btn';
-      setBtn.textContent = '🕒 تحديد وقت ال' + actionLabel;
+      setBtn.textContent = '🕒 تحديد تاريخ ووقت ال' + actionLabel;
       setBtn.addEventListener('click', async () => {
-        const time = await modalPrompt('اكتب الوقت الفعلي ل' + actionLabel + ' ' + l.name + ':', 'تحديد وقت ال' + actionLabel, 'time');
-        if (!time) return;
-        const [hh, mm] = time.split(':').map(Number);
-        if (isNaN(hh) || isNaN(mm)) { await modalAlert('وقت غير صحيح'); return; }
-        const ok = await updateLogEntryTime(l.id, hh, mm);
+        const d = new Date(l.timestamp);
+        const pad = (n) => String(n).padStart(2, '0');
+        const defaultDate = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+        const defaultTime = pad(d.getHours()) + ':' + pad(d.getMinutes());
+        const result = await modalPromptDateTime(
+          'اختر التاريخ والوقت الفعلي ل' + actionLabel + ' ' + l.name + ':',
+          'تحديد تاريخ ووقت ال' + actionLabel,
+          defaultDate, defaultTime
+        );
+        if (!result) return;
+        const ok = await updateLogEntryDateTime(l.id, result.date, result.time);
         if (ok) {
-          showStatus('تم تحديد الوقت بنجاح', true);
+          showStatus('تم تحديد التاريخ والوقت بنجاح', true);
           renderLogList(document.getElementById('searchLog').value);
         } else {
           await modalAlert('حدث خطأ أثناء الحفظ، حاول مرة أخرى');
