@@ -196,14 +196,16 @@
   .action-bar .sel-info { font-size: 0.9rem; }
   .action-bar .sel-info .sel-name { font-weight: 800; display: block; font-size: 1.05rem; color: #1e293b; }
   .action-bar .sel-info .sel-dept { color: #64748b; font-size: 0.8rem; }
+  .action-bar-btns { display: flex; gap: 8px; }
   .action-bar button.do-action {
-    padding: 13px 24px;
+    padding: 12px 16px;
     border: none;
     border-radius: 10px;
     font-weight: bold;
-    font-size: 1rem;
+    font-size: 0.9rem;
     cursor: pointer;
     color: #fff;
+    white-space: nowrap;
   }
   .do-in { background: #16a34a; }
   .do-out { background: #dc2626; }
@@ -242,6 +244,18 @@
   .log-item .l-name { font-weight: 800; font-size: 1.1rem; color: #1e293b; }
   .log-item .l-meta { color: #64748b; font-size: 0.85rem; margin-top: 2px; }
   .log-item .badge { font-size: 1rem; padding: 7px 16px; }
+  .log-item .l-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .badge-unknown { background: #fef3c7; color: #92400e; }
+  .set-time-btn {
+    background: #dbeafe;
+    color: #1d4ed8;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
 
   /* Manage */
   .manage-row {
@@ -399,7 +413,10 @@
       <span class="sel-name" id="selName"></span>
       <span class="sel-dept" id="selDept"></span>
     </div>
-    <button class="do-action" id="doActionBtn"></button>
+    <div class="action-bar-btns">
+      <button class="do-action do-in" id="doInBtn">✅ دخول</button>
+      <button class="do-action do-out" id="doOutBtn">🚪 خروج</button>
+    </div>
   </div>
 </div>
 
@@ -502,17 +519,54 @@ async function loadLogs() {
     logs = [];
   }
 }
-async function addLogEntry(code, name, type) {
-  const entry = { code, name, type, timestamp: Date.now() };
-  const updated = [entry, ...logs];
+function makeId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+async function persistLogs(updatedArray) {
   try {
-    await db.collection(DATA_COLLECTION).doc(LOGS_KEY).set({ items: updated });
-    logs = updated;
+    await db.collection(DATA_COLLECTION).doc(LOGS_KEY).set({ items: updatedArray });
+    logs = updatedArray;
     return true;
   } catch (e) {
-    console.error('addLogEntry failed:', e);
+    console.error('persistLogs failed:', e);
     return false;
   }
+}
+
+async function addLogEntry(code, name, type) {
+  const entry = { id: makeId(), code, name, type, timestamp: Date.now(), timeUnknown: false };
+  return await persistLogs([entry, ...logs]);
+}
+
+// Used when security logs a check-out for someone whose check-in was never recorded.
+// Auto-creates a matching "in" entry with an unknown time, right before the "out" entry.
+async function addCheckoutWithMissingCheckin(code, name) {
+  const outTs = Date.now();
+  const inEntry = { id: makeId(), code, name, type: 'in', timestamp: outTs - 1, timeUnknown: true };
+  const outEntry = { id: makeId(), code, name, type: 'out', timestamp: outTs, timeUnknown: false };
+  return await persistLogs([outEntry, inEntry, ...logs]);
+}
+
+// Used when security logs a check-in for someone who was still marked "in" (their previous
+// check-out was never recorded). Auto-creates a matching "out" entry with an unknown time,
+// right before the new "in" entry.
+async function addCheckinWithMissingCheckout(code, name) {
+  const inTs = Date.now();
+  const outEntry = { id: makeId(), code, name, type: 'out', timestamp: inTs - 1, timeUnknown: true };
+  const inEntry = { id: makeId(), code, name, type: 'in', timestamp: inTs, timeUnknown: false };
+  return await persistLogs([inEntry, outEntry, ...logs]);
+}
+
+async function updateLogEntryTime(id, hours, minutes) {
+  const idx = logs.findIndex(l => l.id === id);
+  if (idx === -1) return false;
+  const entry = logs[idx];
+  const d = new Date(entry.timestamp);
+  d.setHours(hours, minutes, 0, 0);
+  const updatedArray = logs.slice();
+  updatedArray[idx] = { ...entry, timestamp: d.getTime(), timeUnknown: false };
+  return await persistLogs(updatedArray);
 }
 
 // ---------- Status helpers ----------
@@ -702,17 +756,8 @@ function selectEmployee(code) {
 function showActionBar(code) {
   const emp = employees.find(e => e.code === code);
   if (!emp) return;
-  const status = lastStatusFor(code);
   document.getElementById('selName').textContent = emp.name;
   document.getElementById('selDept').textContent = (emp.dept || 'بدون إدارة') + ' - كود ' + emp.code;
-  const btn = document.getElementById('doActionBtn');
-  if (status === 'in') {
-    btn.textContent = '🚪 تسجيل خروج';
-    btn.className = 'do-action do-out';
-  } else {
-    btn.textContent = '✅ تسجيل دخول';
-    btn.className = 'do-action do-in';
-  }
   document.getElementById('actionBar').classList.add('show');
 }
 function hideActionBar() {
@@ -725,16 +770,44 @@ document.getElementById('cancelSelBtn').addEventListener('click', () => {
   renderEmpGroups(document.getElementById('searchEmp').value);
 });
 
-document.getElementById('doActionBtn').addEventListener('click', async () => {
+document.getElementById('doInBtn').addEventListener('click', async () => {
   if (!selectedCode) return;
   const emp = employees.find(e => e.code === selectedCode);
   if (!emp) return;
-  const status = lastStatusFor(selectedCode);
-  const newType = status === 'in' ? 'out' : 'in';
-  const ok = await addLogEntry(emp.code, emp.name, newType);
+  const status = lastStatusFor(emp.code);
+  let ok;
+  let extraNote = '';
+  if (status === 'in') {
+    // Already marked "in" — their previous check-out was never recorded.
+    ok = await addCheckinWithMissingCheckout(emp.code, emp.name);
+    extraNote = ' (تم تسجيل خروجه السابق تلقائياً بتوقيت غير معروف — يمكنك تحديد الوقت من تبويب السجل)';
+  } else {
+    ok = await addLogEntry(emp.code, emp.name, 'in');
+  }
   if (ok) {
-    showStatus((newType === 'in' ? 'تم تسجيل دخول: ' : 'تم تسجيل خروج: ') + emp.name, true);
-    showActionBar(selectedCode);
+    showStatus('تم تسجيل دخول: ' + emp.name + extraNote, true);
+    renderEmpGroups(document.getElementById('searchEmp').value);
+  } else {
+    showStatus('فشل التسجيل، حاول مرة أخرى', false);
+  }
+});
+
+document.getElementById('doOutBtn').addEventListener('click', async () => {
+  if (!selectedCode) return;
+  const emp = employees.find(e => e.code === selectedCode);
+  if (!emp) return;
+  const status = lastStatusFor(emp.code);
+  let ok;
+  let extraNote = '';
+  if (status === 'in') {
+    ok = await addLogEntry(emp.code, emp.name, 'out');
+  } else {
+    // No recorded check-in — auto-add an "in" entry with unknown time alongside this check-out.
+    ok = await addCheckoutWithMissingCheckin(emp.code, emp.name);
+    extraNote = ' (تم تسجيل دخوله تلقائياً بتوقيت غير معروف — يمكنك تحديد الوقت من تبويب السجل)';
+  }
+  if (ok) {
+    showStatus('تم تسجيل خروج: ' + emp.name + extraNote, true);
     renderEmpGroups(document.getElementById('searchEmp').value);
   } else {
     showStatus('فشل التسجيل، حاول مرة أخرى', false);
@@ -766,15 +839,41 @@ function renderLogList(filter = '') {
   data.slice(0, 150).forEach(l => {
     const row = document.createElement('div');
     row.className = 'log-item';
+
+    const badgeClass = l.timeUnknown ? 'badge-unknown' : (l.type === 'in' ? 'badge-in' : 'badge-out');
+    const actionLabel = l.type === 'in' ? 'دخول' : 'خروج';
+    const badgeText = actionLabel + (l.timeUnknown ? ' - توقيت غير معروف' : ' - ' + fmtTime(l.timestamp));
+
     row.innerHTML = `
       <div>
         <div class="l-name">${l.name}</div>
         <div class="l-meta">كود ${l.code || '-'} · ${fmtDate(l.timestamp)}</div>
       </div>
-      <span class="badge ${l.type === 'in' ? 'badge-in' : 'badge-out'}">
-        ${l.type === 'in' ? 'دخول' : 'خروج'} - ${fmtTime(l.timestamp)}
-      </span>
+      <div class="l-right">
+        <span class="badge ${badgeClass}">${badgeText}</span>
+      </div>
     `;
+
+    if (l.timeUnknown) {
+      const setBtn = document.createElement('button');
+      setBtn.className = 'set-time-btn';
+      setBtn.textContent = '🕒 تحديد وقت ال' + actionLabel;
+      setBtn.addEventListener('click', async () => {
+        const time = await modalPrompt('اكتب الوقت الفعلي ل' + actionLabel + ' ' + l.name + ':', 'تحديد وقت ال' + actionLabel, 'time');
+        if (!time) return;
+        const [hh, mm] = time.split(':').map(Number);
+        if (isNaN(hh) || isNaN(mm)) { await modalAlert('وقت غير صحيح'); return; }
+        const ok = await updateLogEntryTime(l.id, hh, mm);
+        if (ok) {
+          showStatus('تم تحديد الوقت بنجاح', true);
+          renderLogList(document.getElementById('searchLog').value);
+        } else {
+          await modalAlert('حدث خطأ أثناء الحفظ، حاول مرة أخرى');
+        }
+      });
+      row.querySelector('.l-right').appendChild(setBtn);
+    }
+
     container.appendChild(row);
   });
 }
